@@ -1,11 +1,13 @@
 """
 base_graph module
 """
+
 import time
 import warnings
 from typing import Tuple
+
 from langchain_community.callbacks import get_openai_callback
-from ..telemetry import log_graph_execution
+
 
 class BaseGraph:
     """
@@ -45,7 +47,15 @@ class BaseGraph:
         ... )
     """
 
-    def __init__(self, nodes: list, edges: list, entry_point: str, use_burr: bool = False, burr_config: dict = None, graph_name: str = "Custom"):
+    def __init__(
+        self,
+        nodes: list,
+        edges: list,
+        entry_point: str,
+        use_burr: bool = False,
+        burr_config: dict = None,
+        graph_name: str = "Custom",
+    ):
         self.nodes = nodes
         self.raw_edges = edges
         self.edges = self._create_edges({e for e in edges})
@@ -56,7 +66,8 @@ class BaseGraph:
         if nodes[0].node_name != entry_point.node_name:
             # raise a warning if the entry point is not the first node in the list
             warnings.warn(
-                "Careful! The entry point node is different from the first node in the graph.")
+                "Careful! The entry point node is different from the first node in the graph."
+            )
 
         # Burr configuration
         self.use_burr = use_burr
@@ -80,7 +91,7 @@ class BaseGraph:
 
     def _execute_standard(self, initial_state: dict) -> Tuple[dict, list]:
         """
-        Executes the graph by traversing nodes starting from the 
+        Executes the graph by traversing nodes starting from the
         entry point using the standard method.
 
         Args:
@@ -114,7 +125,9 @@ class BaseGraph:
 
         while current_node_name:
             curr_time = time.time()
-            current_node = next(node for node in self.nodes if node.node_name == current_node_name)
+            current_node = next(
+                node for node in self.nodes if node.node_name == current_node_name
+            )
 
             # check if there is a "source" key in the node config
             if current_node.__class__.__name__ == "FetchNode":
@@ -122,7 +135,11 @@ class BaseGraph:
                 source_type = list(state.keys())[1]
                 if state.get("user_prompt", None):
                     # Set 'prompt' if 'user_prompt' is a string, otherwise None
-                    prompt = state["user_prompt"] if isinstance(state["user_prompt"], str) else None
+                    prompt = (
+                        state["user_prompt"]
+                        if isinstance(state["user_prompt"], str)
+                        else None
+                    )
 
                 # Convert 'local_dir' source type to 'html_dir'
                 if source_type == "local_dir":
@@ -154,9 +171,9 @@ class BaseGraph:
                     embedder_model = embedder_model.model
 
             if hasattr(current_node, "node_config"):
-                if isinstance(current_node.node_config,dict):
+                if isinstance(current_node.node_config, dict):
                     if current_node.node_config.get("schema", None) and schema is None:
-                        if not  isinstance(current_node.node_config["schema"], dict):
+                        if not isinstance(current_node.node_config["schema"], dict):
                             # convert to dict
                             try:
                                 schema = current_node.node_config["schema"].schema()
@@ -179,7 +196,7 @@ class BaseGraph:
                         source_type=source_type,
                         execution_time=graph_execution_time,
                         error_node=error_node,
-                        exception=str(e)
+                        exception=str(e),
                     )
                     raise e
                 node_exec_time = time.time() - curr_time
@@ -210,34 +227,22 @@ class BaseGraph:
             else:
                 current_node_name = None
 
-        exec_info.append({
-            "node_name": "TOTAL RESULT",
-            "total_tokens": cb_total["total_tokens"],
-            "prompt_tokens": cb_total["prompt_tokens"],
-            "completion_tokens": cb_total["completion_tokens"],
-            "successful_requests": cb_total["successful_requests"],
-            "total_cost_USD": cb_total["total_cost_USD"],
-            "exec_time": total_exec_time,
-        })
+        exec_info.append(
+            {
+                "node_name": "TOTAL RESULT",
+                "total_tokens": cb_total["total_tokens"],
+                "prompt_tokens": cb_total["prompt_tokens"],
+                "completion_tokens": cb_total["completion_tokens"],
+                "successful_requests": cb_total["successful_requests"],
+                "total_cost_USD": cb_total["total_cost_USD"],
+                "exec_time": total_exec_time,
+            }
+        )
 
         # Log the graph execution telemetry
         graph_execution_time = time.time() - start_time
         response = state.get("answer", None) if source_type == "url" else None
         content = state.get("parsed_doc", None) if response is not None else None
-
-        log_graph_execution(
-            graph_name=self.graph_name,
-            source=source,
-            prompt=prompt,
-            schema=schema,
-            llm_model=llm_model,
-            embedder_model=embedder_model,
-            source_type=source_type,
-            content=content,
-            response=response,
-            execution_time=graph_execution_time,
-            total_tokens=cb_total["total_tokens"] if cb_total["total_tokens"] > 0 else None,
-        )
 
         return state, exec_info
 
@@ -272,7 +277,9 @@ class BaseGraph:
 
         # if node name already exists in the graph, raise an exception
         if node.node_name in {n.node_name for n in self.nodes}:
-            raise ValueError(f"Node with name '{node.node_name}' already exists in the graph. You can change it by setting the 'node_name' attribute.")
+            raise ValueError(
+                f"Node with name '{node.node_name}' already exists in the graph. You can change it by setting the 'node_name' attribute."
+            )
 
         # get the last node in the list
         last_node = self.nodes[-1]
