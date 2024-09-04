@@ -1,12 +1,17 @@
-""" 
-Basic example of scraping pipeline using ScriptCreatorGraph
+"""
+Example of custom graph using existing nodes
 """
 
 import os
+import time
+from typing import List, Optional
 
 from dotenv import load_dotenv
+from langchain_core.pydantic_v1 import BaseModel, Field
+from langchain_openai import ChatOpenAI
 
-from scrapegraphai.graphs import ScriptCreatorMultiGraph
+from scrapegraphai.graphs import BaseGraph, SmartScraperGraph
+from scrapegraphai.nodes import GraphIteratorNode, SearchInternetNode
 from scrapegraphai.utils import prettify_exec_info
 
 load_dotenv()
@@ -16,36 +21,65 @@ load_dotenv()
 # ************************************************
 
 openai_key = os.getenv("OPENAI_APIKEY")
-
 graph_config = {
     "llm": {
-        "api_key": openai_key,
         "model": "openai/gpt-4o-mini",
+        "api_key": openai_key,
     },
-    "library": "beautifulsoup",
     "verbose": True,
+    "headless": True,
 }
 
-# ************************************************
-# Create the ScriptCreatorGraph instance and run it
-# ************************************************
 
-urls = ["https://perinim.github.io/", "https://perinim.github.io/cv/"]
+class Project(BaseModel):
+    title: Optional[str] = Field(description="The title of the project")
+    description: Optional[str] = Field(description="The description of the project")
 
-# ************************************************
-# Create the ScriptCreatorGraph instance and run it
-# ************************************************
 
-script_creator_graph = ScriptCreatorMultiGraph(
-    prompt="Who is Marco Perini?", source=urls, config=graph_config
+class Projects(BaseModel):
+    projects: List[Project]
+
+
+llm_model = ChatOpenAI(api_key=openai_key, model="gpt-4o-mini")
+search_max_results = 3
+
+# Define the graph nodes
+search_internet_node = SearchInternetNode(
+    input="user_prompt",
+    output=["urls"],
+    node_config={"llm_model": llm_model, "max_results": search_max_results},
 )
 
-result = script_creator_graph.run()
+smart_scraper_instance = SmartScraperGraph(
+    prompt="List me all the web page with url and content",
+    source="",
+    # schema=Projects,
+    config=graph_config,
+)
+
+graph_iterator_node = GraphIteratorNode(
+    input="user_prompt & urls",
+    output=["results"],
+    node_config={
+        "graph_instance": smart_scraper_instance,
+    },
+)
+
+graph = BaseGraph(
+    nodes=[search_internet_node, graph_iterator_node],
+    edges=[
+        (search_internet_node, graph_iterator_node),
+    ],
+    entry_point=search_internet_node,
+    # graph_name=self.__class__.__name__,
+)
+
+# ************************************************
+# Create the graph by defining the connections
+# ************************************************
+시작_시간 = time.time()
+result, execution_info = graph.execute({"user_prompt": "패러닷 이한솔이 누구야"})
+종료_시간 = time.time()
+실행_시간 = 종료_시간 - 시작_시간
+print(f"실행 시간: {실행_시간:.2f}초")
 print(result)
-
-# ************************************************
-# Get graph execution info
-# ************************************************
-
-graph_exec_info = script_creator_graph.get_execution_info()
-print(prettify_exec_info(graph_exec_info))

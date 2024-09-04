@@ -186,18 +186,18 @@ class BaseGraph:
                 except Exception as e:
                     error_node = current_node.node_name
                     graph_execution_time = time.time() - start_time
-                    log_graph_execution(
-                        graph_name=self.graph_name,
-                        source=source,
-                        prompt=prompt,
-                        schema=schema,
-                        llm_model=llm_model,
-                        embedder_model=embedder_model,
-                        source_type=source_type,
-                        execution_time=graph_execution_time,
-                        error_node=error_node,
-                        exception=str(e),
-                    )
+                    # log_graph_execution(
+                    #     graph_name=self.graph_name,
+                    #     source=source,
+                    #     prompt=prompt,
+                    #     schema=schema,
+                    #     llm_model=llm_model,
+                    #     embedder_model=embedder_model,
+                    #     source_type=source_type,
+                    #     execution_time=graph_execution_time,
+                    #     error_node=error_node,
+                    #     exception=str(e),
+                    # )
                     raise e
                 node_exec_time = time.time() - curr_time
                 total_exec_time += node_exec_time
