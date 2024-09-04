@@ -4,6 +4,7 @@ from typing import List
 
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.pydantic_v1 import BaseModel, Field
 from langchain_openai import ChatOpenAI
 
 from scrapegraphai.graphs import BaseGraph, SmartScraperGraph
@@ -17,7 +18,9 @@ load_dotenv()
 class WebSearchGraph(AbstractGraph):
     def __init__(self, config: dict, llm_model: ChatOpenAI):
         self.llm_model = llm_model
+        self._create_graph(config)
 
+    def _create_graph(self, config: dict):
         search_internet_node = SearchInternetNode(
             input="user_prompt",
             output=["urls"],
@@ -88,6 +91,10 @@ class WebSearchGraph(AbstractGraph):
         return self.considered_urls
 
 
+class QueryType(BaseModel):
+    type: str = Field(description="")
+
+
 if __name__ == "__main__":
     graph_config = {
         "llm": {
@@ -101,22 +108,41 @@ if __name__ == "__main__":
     }
     model = graph_config["llm"]["model"].split("/")[1]
     llm_model = ChatOpenAI(api_key=graph_config["llm"]["api_key"], model=model)
-    graph = WebSearchGraph(graph_config)
+    graph = WebSearchGraph(graph_config, llm_model)
 
-    query = "강남역 맛집 알려줘"
+    query = "이순신 장군이 누구야?"
 
+    structured_llm = llm_model.with_structured_output(QueryType)
     messages = [
         SystemMessage(
             content="""
-            Your task is to deliver a concise and accurate response to a user's query, drawing from the given search results.\n
-            Your answer concise but detailed and aim to be 100 words.\n
-            Output instructions: Return markdown format."
-            """
+            Your task is to deliver accurate response to a user's query.\n
+            If user's query is about current events or something that requires real-time information (weather, sports scores, etc.), return QUERY_TYPE_WEB.\n
+            If user's query is about some term you are totally unfamiliar with (it might be new), return QUERY_TYPE_WEB.\n
+            If user explicitly asks you to browse or provide links to references, return QUERY_TYPE_WEB.\n
+            If user's query is something you can answer without using web, return QUERY_TYPE_GPT.
+        """
         ),
         HumanMessage(content=f"{query}"),
     ]
+    res = structured_llm.invoke(messages)
 
-    llm_model.invoke()
+    if res.type == "QUERY_TYPE_WEB":
+        result = graph.run(query)
+    elif res.type == "QUERY_TYPE_GPT":
+        messages = [
+            SystemMessage(
+                content="""
+                Your task is to deliver accurate response to a user's query.\n
+                Your answer concise but detailed and aim to be 100 words.
+                Output instructions: Return markdown format.
+            """
+            ),
+            HumanMessage(content=f"{query}"),
+        ]
+        result = llm_model.invoke(messages)
+        result = result.content
+    else:
+        print("Unknown query type")
 
-    result = graph.run(query)
     print(result)
