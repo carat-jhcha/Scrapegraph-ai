@@ -99,7 +99,9 @@ class SearchInternetNode(BaseNode):
 
         if self.serper:
             answer = get_serper_links(
-                self.node_config["serper_api_key"], search_query, self.max_results
+                self.node_config["serper_api_key"],
+                search_query,
+                self.max_results + 3,
             )
         else:
             answer = search_on_web(

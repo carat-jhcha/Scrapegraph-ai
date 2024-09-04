@@ -3,7 +3,7 @@ import os
 from typing import List
 
 from dotenv import load_dotenv
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langchain_core.pydantic_v1 import BaseModel, Field
 from langchain_openai import ChatOpenAI
 
@@ -73,15 +73,30 @@ class WebSearchGraph(AbstractGraph):
 
         messages = [
             SystemMessage(
-                content="""
+                content=f"""
+                You are a large language model trained by Carat AI.
                 Your task is to deliver a concise and accurate response to a user's query, drawing from the given search results.\n
                 Your answer concise but detailed and aim to be 100 words.\n
-                Output instructions: Return markdown format.
+                Your answer must be written in the same language as the question, even if language preference is different.\n
+                If the search_result is not related to the query, ignore the search_result for your answer.\n
+                If previous chat is related to user's query, persistant context.\n
+                Output instructions: Return markdown format.\n
+                search_result: {search_result}\n
                 """
             ),
-            HumanMessage(
-                content=f"search_result: {search_result}\nuser's query: {query}"
+            HumanMessage(content=f"여행지 추천해줘"),
+            AIMessage(
+                content="""
+               여행지로 추천할 만한 곳은 다음과 같습니다:
+
+1. **올랜도** - 디즈니랜드와 유니버셜 스튜디오가 있어 가족 단위 여행에 적합한 테마파크 천국입니다.
+2. **뉴욕** - 예술과 문화의 중심지로, 엠파이어 스테이트 빌딩과 자유의 여신상이 유명합니다.
+3. **라스베이거스** - 24시간 화려한 엔터테인먼트 도시로, 그랜드캐니언과 가까워 자연경관도 즐길 수 있습니다.
+4. **샌프란시스코** - 금문교와 온화한 기후로 유명한 아름다운 여행지입니다.
+
+각 장소는 다양한 매력을 지니고 있어 여행의 재미를 더해줍니다!                """
             ),
+            HumanMessage(content=query),
         ]
 
         res = self.llm_model.invoke(messages)
@@ -89,10 +104,6 @@ class WebSearchGraph(AbstractGraph):
 
     def get_considered_urls(self) -> List[str]:
         return self.considered_urls
-
-
-class QueryType(BaseModel):
-    type: str = Field(description="")
 
 
 if __name__ == "__main__":
@@ -110,39 +121,8 @@ if __name__ == "__main__":
     llm_model = ChatOpenAI(api_key=graph_config["llm"]["api_key"], model=model)
     graph = WebSearchGraph(graph_config, llm_model)
 
-    query = "이순신 장군이 누구야?"
-
-    structured_llm = llm_model.with_structured_output(QueryType)
-    messages = [
-        SystemMessage(
-            content="""
-            Your task is to deliver accurate response to a user's query.\n
-            If user's query is about current events or something that requires real-time information (weather, sports scores, etc.), return QUERY_TYPE_WEB.\n
-            If user's query is about some term you are totally unfamiliar with (it might be new), return QUERY_TYPE_WEB.\n
-            If user explicitly asks you to browse or provide links to references, return QUERY_TYPE_WEB.\n
-            If user's query is something you can answer without using web, return QUERY_TYPE_GPT.
-        """
-        ),
-        HumanMessage(content=f"{query}"),
-    ]
-    res = structured_llm.invoke(messages)
-
-    if res.type == "QUERY_TYPE_WEB":
-        result = graph.run(query)
-    elif res.type == "QUERY_TYPE_GPT":
-        messages = [
-            SystemMessage(
-                content="""
-                Your task is to deliver accurate response to a user's query.\n
-                Your answer concise but detailed and aim to be 100 words.
-                Output instructions: Return markdown format.
-            """
-            ),
-            HumanMessage(content=f"{query}"),
-        ]
-        result = llm_model.invoke(messages)
-        result = result.content
-    else:
-        print("Unknown query type")
+    query = ""
+    result = graph.run(query)
 
     print(result)
+    print(graph.get_considered_urls())
