@@ -2,6 +2,7 @@
 SearchInternetNode Module
 """
 
+from datetime import date
 from typing import List, Optional
 
 from langchain.output_parsers import CommaSeparatedListOutputParser
@@ -83,6 +84,7 @@ class SearchInternetNode(BaseNode):
             template=TEMPLATE_SEARCH_INTERNET,
             input_variables=["user_prompt"],
         )
+        search_prompt += f"\nCURRENT DATE: {date.today().strftime('%Y-%m-%d')}"
 
         search_answer = search_prompt | self.llm_model | output_parser
 
@@ -96,15 +98,17 @@ class SearchInternetNode(BaseNode):
         self.logger.info(f"Search Query: {search_query}")
 
         if self.serper:
-            answer = get_serper_links(search_query, self.max_results)
+            answer = get_serper_links(
+                self.node_config["serper_api_key"], search_query, self.max_results
+            )
         else:
             answer = search_on_web(
                 query=search_query,
-                max_results=self.max_results,
+                max_results=self.max_results + 3,
                 search_engine=self.search_engine,
             )
-
         answer = [url for url in answer if "wiki" not in url.lower()]
+        answer = answer[: self.max_results]
 
         if len(answer) == 0:
             raise ValueError("Zero results found for the search query.")

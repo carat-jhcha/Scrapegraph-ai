@@ -149,7 +149,7 @@ class GenerateAnswerNode(BaseNode):
                 input_variables=["question"],
                 partial_variables={
                     "context": doc,
-                    "format_instructions": "100자로 요약해서 답변해줘",
+                    "format_instructions": format_instructions,
                 },
             )
             chain = prompt | self.llm_model | output_parser
@@ -169,7 +169,7 @@ class GenerateAnswerNode(BaseNode):
                 partial_variables={
                     "context": chunk,
                     "chunk_id": i + 1,
-                    "format_instructions": format_instructions,
+                    "format_instructions": "Return a str",
                 },
             )
             chain_name = f"chunk{i+1}"

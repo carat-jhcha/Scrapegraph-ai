@@ -1,90 +1,105 @@
-"""
-Example of custom graph using existing nodes
-"""
-
+import json
 import os
-import time
-from typing import List, Optional
+from typing import List
 
 from dotenv import load_dotenv
-from langchain_core.pydantic_v1 import BaseModel, Field
 from langchain_openai import ChatOpenAI
 
 from scrapegraphai.graphs import BaseGraph, SmartScraperGraph
+from scrapegraphai.graphs.abstract_graph import AbstractGraph
 from scrapegraphai.nodes import GraphIteratorNode, SearchInternetNode
 from scrapegraphai.utils import prettify_exec_info
 
 load_dotenv()
 
-# ************************************************
-# Define the configuration for the graph
-# ************************************************
 
-openai_key = os.getenv("OPENAI_APIKEY")
-graph_config = {
-    "llm": {
-        "model": "openai/gpt-4o-mini",
-        "api_key": openai_key,
-    },
-    "verbose": True,
-    "headless": True,
-}
+class WebSearchGraph(AbstractGraph):
+    def __init__(self, config: dict):
+        self._create_graph(config)
+
+    def _create_graph(self, config: dict) -> BaseGraph:
+        model = config["llm"]["model"].split("/")[1]
+        self.llm_model = ChatOpenAI(api_key=config["llm"]["api_key"], model=model)
+
+        # Define the graph nodes
+        search_internet_node = SearchInternetNode(
+            input="user_prompt",
+            output=["urls"],
+            node_config={
+                "llm_model": self.llm_model,
+                "max_results": config["search_max_results"],
+                "serper": True,
+                "serper_api_key": config["serper_api_key"],
+            },
+        )
+
+        smart_scraper_instance = SmartScraperGraph(
+            prompt="List me all the web page with url and content",
+            source="",
+            config=config,
+        )
+
+        graph_iterator_node = GraphIteratorNode(
+            input="user_prompt & urls",
+            output=["results"],
+            node_config={
+                "graph_instance": smart_scraper_instance,
+            },
+        )
+
+        self.graph = BaseGraph(
+            nodes=[search_internet_node, graph_iterator_node],
+            edges=[
+                (search_internet_node, graph_iterator_node),
+            ],
+            entry_point=search_internet_node,
+            graph_name=self.__class__.__name__,
+        )
+
+    def run(self, query: str) -> str:
+        result, execution_info = self.graph.execute({"user_prompt": query})
+        # print(prettify_exec_info(execution_info))
+
+        external_docs = result.get("results", "")
+        search_result = ""
+        self.considered_urls = []
+        for i, external_doc in enumerate(external_docs):
+            for k, v in external_doc.items():
+                if v == "NA":
+                    continue
+                if isinstance(v, (list, dict)):
+                    v = json.dumps(v, ensure_ascii=False)
+                search_result += v + "\n"
+                self.considered_urls.append(result.get("urls", "")[i])
+
+        final_prompt = f"""
+        Your task is to deliver a concise and accurate response to a user's query, drawing from the given search results.\n
+        Your answer concise but detailed and aim to be 100 words.\n
+        Output instructions: Return markdown format.\n
+        search_result: {search_result}\n
+        user's query: {query}
+        """
+
+        res = self.llm_model.invoke(final_prompt)
+        return res.content
+
+    def get_considered_urls(self) -> List[str]:
+        return self.considered_urls
 
 
-class Project(BaseModel):
-    title: Optional[str] = Field(description="The title of the project")
-    description: Optional[str] = Field(description="The description of the project")
+if __name__ == "__main__":
+    graph_config = {
+        "llm": {
+            "model": "openai/gpt-4o-mini",
+            "api_key": os.getenv("OPENAI_APIKEY"),
+        },
+        "verbose": True,
+        "headless": True,
+        "search_max_results": 3,
+        "serper_api_key": os.getenv("SERPER_APIKEY"),
+    }
 
-
-class Projects(BaseModel):
-    projects: List[Project]
-
-
-llm_model = ChatOpenAI(api_key=openai_key, model="gpt-4o-mini")
-search_max_results = 3
-
-# Define the graph nodes
-search_internet_node = SearchInternetNode(
-    input="user_prompt",
-    output=["urls"],
-    node_config={
-        "llm_model": llm_model,
-        "max_results": search_max_results,
-        "serper": True,
-    },
-)
-
-smart_scraper_instance = SmartScraperGraph(
-    prompt="List me all the web page with url and content",
-    source="",
-    # schema=Projects,
-    config=graph_config,
-)
-
-graph_iterator_node = GraphIteratorNode(
-    input="user_prompt & urls",
-    output=["results"],
-    node_config={
-        "graph_instance": smart_scraper_instance,
-    },
-)
-
-graph = BaseGraph(
-    nodes=[search_internet_node, graph_iterator_node],
-    edges=[
-        (search_internet_node, graph_iterator_node),
-    ],
-    entry_point=search_internet_node,
-    # graph_name=self.__class__.__name__,
-)
-
-# ************************************************
-# Create the graph by defining the connections
-# ************************************************
-시작_시간 = time.time()
-result, execution_info = graph.execute({"user_prompt": "성수역 맛집 추천해줘"})
-종료_시간 = time.time()
-실행_시간 = 종료_시간 - 시작_시간
-print(f"실행 시간: {실행_시간:.2f}초")
-print(result)
-print(prettify_exec_info(execution_info))
+    graph = WebSearchGraph(graph_config)
+    query = "내일 서울 날씨 알려줘"
+    result = graph.run(query)
+    considered_urls = graph.get_considered_urls()

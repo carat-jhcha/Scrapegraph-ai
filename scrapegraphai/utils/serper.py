@@ -1,16 +1,16 @@
 import json
-import os
+from typing import List
 
 import requests
 
-SERPER_APIKEY = os.getenv("SERPER_APIKEY")
 
-
-def get_serper_links(query, max_results=5):
+def get_serper_links(
+    serper_api_key: str, query: str, max_results: int = 3
+) -> List[str]:
     url = "https://google.serper.dev/search"
     payload = json.dumps({"q": query, "num": max_results})
     headers = {
-        "X-API-KEY": SERPER_APIKEY,
+        "X-API-KEY": serper_api_key,
         "Content-Type": "application/json",
     }
 
