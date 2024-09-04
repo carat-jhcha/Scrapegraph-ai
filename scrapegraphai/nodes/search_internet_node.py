@@ -110,8 +110,5 @@ class SearchInternetNode(BaseNode):
         answer = [url for url in answer if "wiki" not in url.lower()]
         answer = answer[: self.max_results]
 
-        if len(answer) == 0:
-            raise ValueError("Zero results found for the search query.")
-
         state.update({self.output[0]: answer})
         return state

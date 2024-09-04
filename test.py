@@ -3,6 +3,7 @@ import os
 from typing import List
 
 from dotenv import load_dotenv
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
 from scrapegraphai.graphs import BaseGraph, SmartScraperGraph
@@ -14,14 +15,9 @@ load_dotenv()
 
 
 class WebSearchGraph(AbstractGraph):
-    def __init__(self, config: dict):
-        self._create_graph(config)
+    def __init__(self, config: dict, llm_model: ChatOpenAI):
+        self.llm_model = llm_model
 
-    def _create_graph(self, config: dict) -> BaseGraph:
-        model = config["llm"]["model"].split("/")[1]
-        self.llm_model = ChatOpenAI(api_key=config["llm"]["api_key"], model=model)
-
-        # Define the graph nodes
         search_internet_node = SearchInternetNode(
             input="user_prompt",
             output=["urls"],
@@ -58,7 +54,7 @@ class WebSearchGraph(AbstractGraph):
 
     def run(self, query: str) -> str:
         result, execution_info = self.graph.execute({"user_prompt": query})
-        # print(prettify_exec_info(execution_info))
+        print(prettify_exec_info(execution_info))
 
         external_docs = result.get("results", "")
         search_result = ""
@@ -72,15 +68,20 @@ class WebSearchGraph(AbstractGraph):
                 search_result += v + "\n"
                 self.considered_urls.append(result.get("urls", "")[i])
 
-        final_prompt = f"""
-        Your task is to deliver a concise and accurate response to a user's query, drawing from the given search results.\n
-        Your answer concise but detailed and aim to be 100 words.\n
-        Output instructions: Return markdown format.\n
-        search_result: {search_result}\n
-        user's query: {query}
-        """
+        messages = [
+            SystemMessage(
+                content="""
+                Your task is to deliver a concise and accurate response to a user's query, drawing from the given search results.\n
+                Your answer concise but detailed and aim to be 100 words.\n
+                Output instructions: Return markdown format.
+                """
+            ),
+            HumanMessage(
+                content=f"search_result: {search_result}\nuser's query: {query}"
+            ),
+        ]
 
-        res = self.llm_model.invoke(final_prompt)
+        res = self.llm_model.invoke(messages)
         return res.content
 
     def get_considered_urls(self) -> List[str]:
@@ -98,8 +99,24 @@ if __name__ == "__main__":
         "search_max_results": 3,
         "serper_api_key": os.getenv("SERPER_APIKEY"),
     }
-
+    model = graph_config["llm"]["model"].split("/")[1]
+    llm_model = ChatOpenAI(api_key=graph_config["llm"]["api_key"], model=model)
     graph = WebSearchGraph(graph_config)
-    query = "내일 서울 날씨 알려줘"
+
+    query = "강남역 맛집 알려줘"
+
+    messages = [
+        SystemMessage(
+            content="""
+            Your task is to deliver a concise and accurate response to a user's query, drawing from the given search results.\n
+            Your answer concise but detailed and aim to be 100 words.\n
+            Output instructions: Return markdown format."
+            """
+        ),
+        HumanMessage(content=f"{query}"),
+    ]
+
+    llm_model.invoke()
+
     result = graph.run(query)
-    considered_urls = graph.get_considered_urls()
+    print(result)
