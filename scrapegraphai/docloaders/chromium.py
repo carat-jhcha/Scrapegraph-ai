@@ -1,6 +1,7 @@
 """
 Chromium module
 """
+
 import asyncio
 from typing import Any, AsyncIterator, Iterator, List, Optional
 
@@ -8,7 +9,6 @@ from langchain_community.document_loaders.base import BaseLoader
 from langchain_core.documents import Document
 
 from ..utils import Proxy, dynamic_import, get_logger, parse_or_search_proxy
-
 
 logger = get_logger("web-loader")
 
@@ -82,15 +82,27 @@ class ChromiumLoader(BaseLoader):
                 headless=self.headless, proxy=self.proxy, **self.browser_config
             )
             try:
-                context = await browser.new_context()
+                context = await browser.new_context(
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+                    locale="ko-KR",
+                    timezone_id="Asia/Seoul",
+                )
                 await Malenia.apply_stealth(context)
                 page = await context.new_page()
-                await page.goto(url, wait_until="domcontentloaded")
-                await page.wait_for_load_state(self.load_state)
-                results = await page.content()  # Simply get the HTML content
-                logger.info("Content scraped")
+                await page.route(
+                    "**/*",
+                    lambda route: (
+                        route.abort()
+                        if route.request.resource_type
+                        in ["image", "stylesheet", "font", "media"]
+                        else route.continue_()
+                    ),
+                )
+                await page.goto(url, wait_until="domcontentloaded", timeout=5000)
+                await page.wait_for_load_state(self.load_state, timeout=5000)
+                results = await page.content()
             except Exception as e:
-                results = f"Error: {e}"
+                results = f"ERROR: {e}"
             await browser.close()
         return results
 

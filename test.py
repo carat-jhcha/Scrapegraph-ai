@@ -47,7 +47,11 @@ search_max_results = 3
 search_internet_node = SearchInternetNode(
     input="user_prompt",
     output=["urls"],
-    node_config={"llm_model": llm_model, "max_results": search_max_results},
+    node_config={
+        "llm_model": llm_model,
+        "max_results": search_max_results,
+        "serper": True,
+    },
 )
 
 smart_scraper_instance = SmartScraperGraph(
@@ -78,8 +82,9 @@ graph = BaseGraph(
 # Create the graph by defining the connections
 # ************************************************
 시작_시간 = time.time()
-result, execution_info = graph.execute({"user_prompt": "패러닷 이한솔이 누구야"})
+result, execution_info = graph.execute({"user_prompt": "성수역 맛집 추천해줘"})
 종료_시간 = time.time()
 실행_시간 = 종료_시간 - 시작_시간
 print(f"실행 시간: {실행_시간:.2f}초")
 print(result)
+print(prettify_exec_info(execution_info))

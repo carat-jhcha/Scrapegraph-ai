@@ -1,18 +1,22 @@
 """"
 FetchNode Module
 """
+
 import json
 from typing import List, Optional
-from langchain_openai import ChatOpenAI, AzureChatOpenAI
+
 import pandas as pd
 import requests
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_core.documents import Document
-from ..utils.cleanup_html import cleanup_html
+from langchain_openai import AzureChatOpenAI, ChatOpenAI
+
 from ..docloaders import ChromiumLoader
+from ..utils.cleanup_html import cleanup_html
 from ..utils.convert_to_md import convert_to_md
 from ..utils.logging import get_logger
 from .base_node import BaseNode
+
 
 class FetchNode(BaseNode):
     """
@@ -55,22 +59,18 @@ class FetchNode(BaseNode):
         self.loader_kwargs = (
             {} if node_config is None else node_config.get("loader_kwargs", {})
         )
-        self.llm_model = (
-            {} if node_config is None else node_config.get("llm_model", {})
-        )
-        self.force = (
-            False if node_config is None else node_config.get("force", False)
-        )
+        self.llm_model = {} if node_config is None else node_config.get("llm_model", {})
+        self.force = False if node_config is None else node_config.get("force", False)
         self.script_creator = (
             False if node_config is None else node_config.get("script_creator", False)
         )
         self.openai_md_enabled = (
-            False if node_config is None else node_config.get("openai_md_enabled", False)
+            False
+            if node_config is None
+            else node_config.get("openai_md_enabled", False)
         )
 
-        self.cut = (
-            False if node_config is None else node_config.get("cut", True)
-        )
+        self.cut = False if node_config is None else node_config.get("cut", True)
 
         self.browser_base = (
             None if node_config is None else node_config.get("browser_base", None)
@@ -102,7 +102,7 @@ class FetchNode(BaseNode):
 
         source = input_data[0]
         input_type = input_keys[0]
-        
+
         handlers = {
             "json_dir": self.handle_directory,
             "xml_dir": self.handle_directory,
@@ -138,9 +138,7 @@ class FetchNode(BaseNode):
         dict: The updated state with the compressed document.
         """
 
-        compressed_document = [
-            source
-        ]
+        compressed_document = [source]
         state.update({self.output[0]: compressed_document})
         return state
 
@@ -184,10 +182,18 @@ class FetchNode(BaseNode):
             loader = PyPDFLoader(source)
             return loader.load()
         elif input_type == "csv":
-            return [Document(page_content=str(pd.read_csv(source)), metadata={"source": "csv"})]
+            return [
+                Document(
+                    page_content=str(pd.read_csv(source)), metadata={"source": "csv"}
+                )
+            ]
         elif input_type == "json":
             with open(source, encoding="utf-8") as f:
-                return [Document(page_content=str(json.load(f)), metadata={"source": "json"})]
+                return [
+                    Document(
+                        page_content=str(json.load(f)), metadata={"source": "json"}
+                    )
+                ]
         elif input_type == "xml" or input_type == "md":
             with open(source, "r", encoding="utf-8") as f:
                 data = f.read()
@@ -215,7 +221,15 @@ class FetchNode(BaseNode):
 
         parsed_content = source
 
-        if (isinstance(self.llm_model, ChatOpenAI) or isinstance(self.llm_model, AzureChatOpenAI)) and not self.script_creator or self.force and not self.script_creator:
+        if (
+            (
+                isinstance(self.llm_model, ChatOpenAI)
+                or isinstance(self.llm_model, AzureChatOpenAI)
+            )
+            and not self.script_creator
+            or self.force
+            and not self.script_creator
+        ):
             parsed_content = convert_to_md(source)
         else:
             parsed_content = source
@@ -228,7 +242,7 @@ class FetchNode(BaseNode):
 
     def handle_web_source(self, state, source):
         """
-        Handles the web source by fetching HTML content from a URL, 
+        Handles the web source by fetching HTML content from a URL,
         optionally converting it to Markdown, and updating the state.
 
         Parameters:
@@ -250,10 +264,15 @@ class FetchNode(BaseNode):
                     raise ValueError("No HTML body content found in the response.")
 
                 if not self.cut:
-                    parsed_content = cleanup_html(response, source)
+                    parsed_content = cleanup_html(response.text, source)
 
-                if  ((isinstance(self.llm_model, ChatOpenAI) or isinstance(self.llm_model, AzureChatOpenAI))
-                     and not self.script_creator) or (self.force and not self.script_creator):
+                if (
+                    (
+                        isinstance(self.llm_model, ChatOpenAI)
+                        or isinstance(self.llm_model, AzureChatOpenAI)
+                    )
+                    and not self.script_creator
+                ) or (self.force and not self.script_creator):
                     parsed_content = convert_to_md(source, parsed_content)
 
                 compressed_document = [Document(page_content=parsed_content)]
@@ -271,28 +290,48 @@ class FetchNode(BaseNode):
                 try:
                     from ..docloaders.browser_base import browser_base_fetch
                 except ImportError:
-                    raise ImportError("The browserbase module is not installed. Please install it using `pip install browserbase`.")
+                    raise ImportError(
+                        "The browserbase module is not installed. Please install it using `pip install browserbase`."
+                    )
 
-                data =  browser_base_fetch(self.browser_base.get("api_key"),
-                                            self.browser_base.get("project_id"), [source])
+                data = browser_base_fetch(
+                    self.browser_base.get("api_key"),
+                    self.browser_base.get("project_id"),
+                    [source],
+                )
 
-                document = [Document(page_content=content,
-                                    metadata={"source": source}) for content in data]
+                document = [
+                    Document(page_content=content, metadata={"source": source})
+                    for content in data
+                ]
             else:
-                loader = ChromiumLoader([source], headless=self.headless, **loader_kwargs)
+                loader = ChromiumLoader(
+                    [source], headless=self.headless, **loader_kwargs
+                )
                 document = loader.load()
 
             if not document or not document[0].page_content.strip():
-                raise ValueError("No HTML body content found in the document fetched by ChromiumLoader.")
+                raise ValueError(
+                    "No HTML body content found in the document fetched by ChromiumLoader."
+                )
             parsed_content = document[0].page_content
 
-            if (isinstance(self.llm_model, ChatOpenAI) or isinstance(self.llm_model, AzureChatOpenAI))  and not self.script_creator or self.force and not self.script_creator and not self.openai_md_enabled:
+            if (
+                (
+                    isinstance(self.llm_model, ChatOpenAI)
+                    or isinstance(self.llm_model, AzureChatOpenAI)
+                )
+                and not self.script_creator
+                or self.force
+                and not self.script_creator
+                and not self.openai_md_enabled
+            ):
                 parsed_content = convert_to_md(document[0].page_content, parsed_content)
 
             compressed_document = [
                 Document(page_content=parsed_content, metadata={"source": "html file"})
             ]
-        
+
         return self.update_state(state, compressed_document)
 
     def update_state(self, state, compressed_document):
@@ -308,5 +347,9 @@ class FetchNode(BaseNode):
             dict: The updated state with the output data.
         """
 
-        state.update({self.output[0]: compressed_document,})
+        state.update(
+            {
+                self.output[0]: compressed_document,
+            }
+        )
         return state

@@ -14,7 +14,7 @@ Output instructions: {format_instructions}\n
 Content of {chunk_id}: {context}. \n
 """
 
-TEMPLATE_NO_CHUNKS_MD  = """
+TEMPLATE_NO_CHUNKS_MD = """
 You are a website scraper and you have just scraped the
 following content from a website converted in markdown format.
 You are now asked to answer a user question about the content you have scraped.\n
@@ -50,7 +50,7 @@ Output instructions: {format_instructions}\n
 Content of {chunk_id}: {context}. \n
 """
 
-TEMPLATE_NO_CHUNKS  = """
+TEMPLATE_NO_CHUNKS = """
 You are a website scraper and you have just scraped the
 following content from a website.
 You are now asked to answer a user question about the content you have scraped.\n
